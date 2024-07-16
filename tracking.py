@@ -1,34 +1,44 @@
-#Bibliotecas
-import streamlit as st #Interface
-import cv2 #Uso de câmeras e manipulação de imagens
-from ultralytics import YOLO #Carregar modelo
-import numpy as np #Transformar imagens em matrizes
-import math #Cálculos 
-import smtplib #E-mail
-import email.message #Texto e-mail
+# Bibliotecas
+import streamlit as st  # Interface
+import cv2  # Uso de câmeras e manipulação de imagens
+from ultralytics import YOLO  # Carregar modelo
+import numpy as np  # Transformar imagens em matrizes
+import math  # Cálculos
+import smtplib  # E-mail
+import email.message  # Texto e-mail
+from email.mime.image import MIMEImage  # Para anexar a imagem no e-mail
+from email.mime.multipart import MIMEMultipart  # Para criar e-mails com múltiplas partes
 
-#E-mail
-def enviar_email():
-        #Corpo de texto do e-mail que foi escrito em html
-        corpo_email = """
-        Olá Sr. Repositor
-        O lote de Coca-cola da nossa prateleira acabou, por favor repôr o quanto antes para evitar perda de vendas!!!
-        """
+# Variável global
+meta = 5
 
-        msg = email.message.Message()
-        msg['Subject'] = "Reposição de bebidas" #Editar o que vem no assunto do email
-        msg['From'] = 'igordiasaguiar05@gmail.com' #Quem envia o email
-        msg['To'] = 'dias2005aguiar@gmail.com'#Quem vai receber o email, se tiver mais de um é só colocar vírgula
-        password = 'zgbrysnrcsrvibaj' #Senha aleatória gerada em senha de app no email
-        msg.add_header('Content-Type', 'text/html')
-        msg.set_payload(corpo_email )
+# Envia um e-mail padronizado automaticamente
+def enviar_email(image_path):
+    corpo_email = """
+    Olá Sr. Repositor,
+    O lote de Coca-cola da nossa prateleira acabou, por favor repôr o quanto antes para evitar perda de vendas!!!
+    Segue em anexo uma imagem da prateleira no momento atual.
+    """
 
-        s = smtplib.SMTP('smtp.gmail.com: 587')
-        s.starttls()
-        # Login Credentials for sending the mail
-        s.login(msg['From'], password)
-        s.sendmail(msg['From'], [msg['To']], msg.as_string().encode('utf-8'))
-        print('Email enviado')
+    msg = MIMEMultipart()
+    msg['Subject'] = "Prateleira com poucos produtos"
+    msg['From'] = 'igordiasaguiar05@gmail.com'
+    msg['To'] = 'dias2005aguiar@gmail.com'
+    password = 'zgbrysnrcsrvibaj'
+
+    msg.attach(email.message.Message())
+    msg.get_payload()[0].set_payload(corpo_email)
+
+    with open(image_path, 'rb') as file:
+        img = MIMEImage(file.read())
+        img.add_header('Content-Disposition', 'attachment', filename="prateleira.jpg")
+        msg.attach(img)
+
+    s = smtplib.SMTP('smtp.gmail.com: 587')
+    s.starttls()
+    s.login(msg['From'], password)
+    s.sendmail(msg['From'], [msg['To']], msg.as_string().encode('utf-8'))
+    print('Email enviado')
 
 # Classes de objetos (Rótulos)
 classNames = ["Coca-Cola"]
@@ -78,11 +88,11 @@ def count_objects(detections):
     st.write(f"Número de objetos detectados: {object_count}")
     return object_count
 
-##ESTRUTURA DO STREAMLIT
+## ESTRUTURA DO STREAMLIT
 
 # Interface do Streamlit
 st.title("Eye-Market")
-st.text("Contador de objetos utiliando Yolov8 em imagens")
+st.text("Identificador de produtos para monitorar sua prateleira")
 
 # Colocando o modelo de detecção utilizado no app atrelado ao que for passado no input do app
 model_path = st.text_input("Caminho para o modelo YOLOv8 treinado (.pt)", value="C:\\Igor\\best.pt")
@@ -101,20 +111,18 @@ if st.button("Detectar Objetos"):
         if model:
             detections = detect_objects(frame, model)
             frame = draw_detections(frame, detections)
-            count_objects(detections)
+            object_count = count_objects(detections)
 
             st.image(frame, channels="BGR")
+
+            if object_count < meta:
+                print("Prateleira com poucos produtos!!!")
+                st.warning("Os produtos estão acabando!")
+                # Salvar a imagem para enviar por e-mail
+                image_path = "prateleira.jpg"
+                cv2.imwrite(image_path, frame)
+                enviar_email(image_path)
+        else:
+            st.error("Erro ao carregar o modelo.")
     else:
         st.error("Por favor, carregue uma imagem.")
-        
-        
-print("IMAGEM ANALISADADA")
-print("Seu modelo detectou: ", len(detections), "objetos na imagem escolhida")
-
-
-#Quantos objetos é o mínimo na prateleira ?
-meta = 5
-if len(detections) < meta:
-    #Importar bibliotecas para mandar e-mail
-    print("Prateleira com poucos produtos!!!")
-    enviar_email()
